@@ -1208,21 +1208,21 @@ class NeuroVarSnapRowWidget(Ui_NNVarSnapRow, QtWidgets.QWidget):
         if dataset is None:
             return
 
+        self.dataset = dataset
+
         self.stepSlider.setMinimum(0)
         self.stepSlider.setMaximum(int(dataset['meta']['trials'][0])-1)
 
         self.stepSpinBox.setMinimum(0)
         self.stepSpinBox.setMaximum(int(dataset['meta']['trials'][0])-1)
 
-        self.NeuronSpinBox.setMinimum(int(self.dataset['meta']['inputNum'][0]))
+        self.NeuronSpinBox.setMinimum(int(dataset['meta']['inputNum'][0]))
         self.NeuronSpinBox.setMaximum(int(dataset['meta']['netsize'][0])-1)
 
         self.LayerSpinBox.setMinimum(1)
         self.LayerSpinBox.setMaximum(len(dataset['meta']['layers'][0])-1)
 
         self.RowNumSpinBox.setMinimum(1)
-
-        self.dataset = dataset
 
     def variableChanged(self, idx):
         currentStep = self.stepSpinBox.value()
