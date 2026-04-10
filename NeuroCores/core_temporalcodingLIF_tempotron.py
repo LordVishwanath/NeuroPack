@@ -199,8 +199,8 @@ def neurons(net, time, phase = 'training'):
 
         if net.state.spikeTrain_cnt == net.state.spikeTrain:
             SumOfFireHistInOneTrain = np.sum(net.state.fireCells[time+1-net.state.spikeTrain : time+2], axis = 1)
-            FireHistInOneTrain = np.where(SumFireHistInOneTrain > 0, 1, 0)
-            net.state.errorList[(time+1) // net.state.spikeTrain] = FireHistInOneTrain - outputLable
+            FireHistInOneTrain = np.where(SumOfFireHistInOneTrain > 0, 1, 0)
+            net.state.errorList[(time+1) // net.state.spikeTrain] = FireHistInOneTrain - outputLabel
     else:
         # Have neurons declare 'interest to fire'.
         for neuron in range(len(net.state.NeurAccum[time])):
@@ -234,15 +234,15 @@ def neurons(net, time, phase = 'training'):
 
         if net.state.spikeTrain_cnt == net.state.spikeTrain:
             SumOfFireHistInOneTrain = np.sum(net.state.fireCells[time+1-net.state.spikeTrain : time+2], axis = 1)
-            FireHistInOneTrain = np.where(SumFireHistInOneTrain > 0, 1, 0)
-            net.state.errorList[(time+1) // net.state.spikeTrain] = FireHistInOneTrain - outputLable
+            FireHistInOneTrain = np.where(SumOfFireHistInOneTrain > 0, 1, 0)
+            net.state.errorList[(time+1) // net.state.spikeTrain] = FireHistInOneTrain - outputLabel
 
 def plast(net, time):
 
     if time + 1 != net.epochs:
         net.state.weights[:, :, time+1] = net.state.weights[:, :, time]
 
-    if net.state.spikeTrain_cnt != net.spikeTrain:
+    if net.state.spikeTrain_cnt != net.state.spikeTrain:
         return
 
     rawin = net.rawin # Raw input, the fire hist this time step
@@ -286,21 +286,19 @@ def plast(net, time):
             input_contrib = sum(K)
             print("input_contrib", input_contrib)
             if rawin[neuron] == 1 and outputLabel[neuron] == 0: # if a neuron is fired when it is not expected to fire
-                net.state.errorList[neuron + net.outputNum - fullNum, net.state.errorSteps_cnt] = 1
+                net.state.errorList[neuron - net.inputNum, net.state.errorSteps_cnt] = 1
                 dW = (-1) * learningRate * input_contrib
                 pulseList = net.pos_pulseList                                                # weights need to be decreased so resistance should be increased
             elif rawin[neuron] == 0 and outputLabel[neuron] == 1:
-                net.state.errorList[neuron + net.outputNum - fullNum, net.state.errorSteps_cnt] = -1
+                net.state.errorList[neuron - net.inputNum, net.state.errorSteps_cnt] = -1
                 dW = learningRate * input_contrib
                 pulseList = net.neg_pulseList
             print("weight change:", dW)
             w,b = net.ConnMat[preidx, neuron, 0:2]
             R = net.read(w, b) # current R
             net.state.R[preidx, neuron - net.inputNum, time*4+1] = R
-            if allNeuronsThatFire[preidx] == 0:
+            if full_stim[preidx] == 0:
                 continue
-            grad = error[neuron] * allNeuronsThatFire[preidx]
-            dW = (-1) * learningRate * grad
 #            if dW > 0: # conductance needs to be larger, so a negative pulse is suplied
 #                pulseList = net.neg_pulseList
 #            else:
@@ -331,7 +329,7 @@ def plast(net, time):
             p_real = 1 / R_real
             p_error = p_real - p_expect
             if net.params.get('NORMALISE', False):
-                net.state.weights[preidx, neuron - net.inputNum - net.inputNum, time+1] = normalise_weight(net, p_real)
+                net.state.weights[preidx, neuron - net.inputNum, time+1] = normalise_weight(net, p_real)
                 net.state.weightsExpected[preidx, neuron - net.inputNum, time+1] = normalise_weight(net, p)
                 net.state.weightsError[preidx, neuron - net.inputNum, time+1] = normalise_weight(net, p_error)
             else:
