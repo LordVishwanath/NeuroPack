@@ -1136,6 +1136,35 @@ class NeuroVarSnapRowWidget(Ui_NNVarSnapRow, QtWidgets.QWidget):
         currentStep = self.stepSpinBox.value()
         self.updatePlotToStep(currentStep)
 
+    def _reshape_for_image(self, imageData):
+        flatData = np.asarray(imageData).reshape(-1)
+        total = flatData.size
+
+        if total == 0:
+            return flatData.reshape((0, 0))
+
+        requestedRows = max(1, int(self.RowNumIdx))
+        if total % requestedRows == 0:
+            rowCount = requestedRows
+        else:
+            validRowCounts = []
+            maxFactor = int(np.sqrt(total))
+            for idx in range(1, maxFactor + 1):
+                if total % idx == 0:
+                    validRowCounts.append(idx)
+                    pairFactor = total // idx
+                    if pairFactor != idx:
+                        validRowCounts.append(pairFactor)
+            rowCount = min(validRowCounts, key=lambda idx: (abs(idx - requestedRows), -idx))
+
+            if rowCount != self.RowNumSpinBox.value():
+                self.RowNumSpinBox.blockSignals(True)
+                self.RowNumSpinBox.setValue(rowCount)
+                self.RowNumSpinBox.blockSignals(False)
+            self.RowNumIdx = rowCount
+
+        return flatData.reshape((rowCount, -1))
+
     def _updateGraph(self, data):
 
         inputNeuronNum = int(self.dataset['meta']['inputNum'][0])
@@ -1158,7 +1187,7 @@ class NeuroVarSnapRowWidget(Ui_NNVarSnapRow, QtWidgets.QWidget):
                 wdg = pg.ImageView()
                 wdg.ui.menuBtn.hide()
                 wdg.ui.roiBtn.hide()
-                wdg.setImage(data[self.prefixSum_layerList[self.layerIdx - 1] : self.prefixSum_layerList[self.layerIdx], (self.neuronIdx - inputNeuronNum), self.step].reshape((self.RowNumIdx, -1)))
+                wdg.setImage(self._reshape_for_image(data[self.prefixSum_layerList[self.layerIdx - 1] : self.prefixSum_layerList[self.layerIdx], (self.neuronIdx - inputNeuronNum), self.step]))
                 cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, 6), color = colors)
                 wdg.setColorMap(cmap)
             elif self.idx == 2:    # accumulator for training
@@ -1185,12 +1214,12 @@ class NeuroVarSnapRowWidget(Ui_NNVarSnapRow, QtWidgets.QWidget):
                 wdg = pg.ImageView()
                 wdg.ui.menuBtn.hide()
                 wdg.ui.roiBtn.hide()
-                wdg.setImage(data[:inputNeuronNum, self.step].reshape((self.RowNumIdx, -1)))
+                wdg.setImage(self._reshape_for_image(data[:inputNeuronNum, self.step]))
             elif self.idx == 9:     # input stimulus for test
                 wdg = pg.ImageView()
                 wdg.ui.menuBtn.hide()
                 wdg.ui.roiBtn.hide()
-                wdg.setImage(data[:inputNeuronNum, self.step].reshape((self.RowNumIdx, -1)))
+                wdg.setImage(self._reshape_for_image(data[:inputNeuronNum, self.step]))
             elif self.idx == 10:     # error for training
                 wdg = pg.PlotWidget()
                 wdg.plot(np.arange(len(data)), data[:, self.neuronIdx], **plotArgs)
@@ -1201,14 +1230,14 @@ class NeuroVarSnapRowWidget(Ui_NNVarSnapRow, QtWidgets.QWidget):
                 wdg = pg.ImageView()
                 wdg.ui.menuBtn.hide()
                 wdg.ui.roiBtn.hide()
-                wdg.setImage(data[self.prefixSum_layerList[self.layerIdx - 1] : self.prefixSum_layerList[self.layerIdx], (self.neuronIdx - inputNeuronNum), self.step].reshape((self.RowNumIdx, -1)))
+                wdg.setImage(self._reshape_for_image(data[self.prefixSum_layerList[self.layerIdx - 1] : self.prefixSum_layerList[self.layerIdx], (self.neuronIdx - inputNeuronNum), self.step]))
                 cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, 6), color = colors)
                 wdg.setColorMap(cmap)
             elif self.idx == 13:    # weight error for each layer
                 wdg = pg.ImageView()
                 wdg.ui.menuBtn.hide()
                 wdg.ui.roiBtn.hide()
-                wdg.setImage(data[self.prefixSum_layerList[self.layerIdx - 1] : self.prefixSum_layerList[self.layerIdx], (self.neuronIdx - inputNeuronNum), self.step].reshape((self.RowNumIdx, -1)))
+                wdg.setImage(self._reshape_for_image(data[self.prefixSum_layerList[self.layerIdx - 1] : self.prefixSum_layerList[self.layerIdx], (self.neuronIdx - inputNeuronNum), self.step]))
                 cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, 6), color = colors)
                 wdg.setColorMap(cmap)
             self.graphHolderLayout.addWidget(wdg)
@@ -1217,7 +1246,7 @@ class NeuroVarSnapRowWidget(Ui_NNVarSnapRow, QtWidgets.QWidget):
             if self.idx == 0:    # weight mapping
                 self.plotWidget.setImage(data.T[self.step])
             elif self.idx == 1:     # weight for each layer
-                self.plotWidget.setImage(data[self.prefixSum_layerList[self.layerIdx - 1] : self.prefixSum_layerList[self.layerIdx], (self.neuronIdx - inputNeuronNum), self.step].reshape((self.RowNumIdx, -1)))
+                self.plotWidget.setImage(self._reshape_for_image(data[self.prefixSum_layerList[self.layerIdx - 1] : self.prefixSum_layerList[self.layerIdx], (self.neuronIdx - inputNeuronNum), self.step]))
             elif self.idx == 2:     # accumulator for training
                 self.plotWidget.plot(np.arange(len(data[0])), data[self.neuronIdx], clear=True, **plotArgs)
             elif self.idx == 3:     # accumulator for test
@@ -1233,17 +1262,17 @@ class NeuroVarSnapRowWidget(Ui_NNVarSnapRow, QtWidgets.QWidget):
                 print('neuron index: ', self.neuronIdx)
                 print('fireHist: ', data[self.neuronIdx])
             elif self.idx == 8:     # input stimulus for training
-                self.plotWidget.setImage(data[:inputNeuronNum, self.step].reshape((self.RowNumIdx, -1)))
+                self.plotWidget.setImage(self._reshape_for_image(data[:inputNeuronNum, self.step]))
             elif self.idx == 9:     # input stimulus for test
-                self.plotWidget.setImage(data[:inputNeuronNum, self.step].reshape((self.RowNumIdx, -1)))
+                self.plotWidget.setImage(self._reshape_for_image(data[:inputNeuronNum, self.step]))
             elif self.idx == 10:     # error for training
                 self.plotWidget.plot(np.arange(len(data)), data[:, self.neuronIdx], clear=True, **plotArgs)
             elif self.idx == 11:     # error for test
                 self.plotWidget.plot(np.arange(len(data)), data[:, self.neuronIdx], clear=True, **plotArgs)
             elif self.idx == 12:    # expected weights for each layer
-                self.plotWidget.setImage(data[self.prefixSum_layerList[self.layerIdx - 1] : self.prefixSum_layerList[self.layerIdx], (self.neuronIdx - inputNeuronNum), self.step].reshape((self.RowNumIdx, -1)))
+                self.plotWidget.setImage(self._reshape_for_image(data[self.prefixSum_layerList[self.layerIdx - 1] : self.prefixSum_layerList[self.layerIdx], (self.neuronIdx - inputNeuronNum), self.step]))
             elif self.idx == 13:    # weight error for each layer
-                self.plotWidget.setImage(data[self.prefixSum_layerList[self.layerIdx - 1] : self.prefixSum_layerList[self.layerIdx], (self.neuronIdx - inputNeuronNum), self.step].reshape((self.RowNumIdx, -1)))
+                self.plotWidget.setImage(self._reshape_for_image(data[self.prefixSum_layerList[self.layerIdx - 1] : self.prefixSum_layerList[self.layerIdx], (self.neuronIdx - inputNeuronNum), self.step]))
 
     def updatePlotToStep(self, step):
         self.idx = self.variableSelectionCombo.currentIndex()
