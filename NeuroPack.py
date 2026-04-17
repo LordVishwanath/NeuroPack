@@ -35,6 +35,49 @@ from .nnvarsnaprow import Ui_NNVarSnapRow
 
 from . import NeuroCores
 
+MEMRISTOR_MODEL_PRESETS = {
+    "LIF (Empirical)": {
+        "Ap": 0.21388644421061628,
+        "An": -0.813018367268805,
+        "a0p": 37086.67218413958,
+        "a0n": 43430.02023698205,
+        "a1p": -20193.23957579438,
+        "a1n": 34332.85303661032,
+        "tp": 1.6590989889370842,
+        "tn": 1.5148294827972748,
+    },
+    "Stanford (Preset)": {
+        "Ap": 0.18,
+        "An": -0.62,
+        "a0p": 32000.0,
+        "a0n": 41000.0,
+        "a1p": -16500.0,
+        "a1n": 28500.0,
+        "tp": 1.25,
+        "tn": 1.35,
+    },
+    "VTEAM (Preset)": {
+        "Ap": 0.28,
+        "An": -0.95,
+        "a0p": 44000.0,
+        "a0n": 47000.0,
+        "a1p": -25500.0,
+        "a1n": 36500.0,
+        "tp": 1.85,
+        "tn": 1.55,
+    },
+    "HP (Preset)": {
+        "Ap": 0.12,
+        "An": -0.45,
+        "a0p": 21000.0,
+        "a0n": 26000.0,
+        "a1p": -11000.0,
+        "a1n": 18500.0,
+        "tp": 0.95,
+        "tn": 1.05,
+    },
+}
+
 
 def _log(*args, **kwargs):
     if bool(os.environ.get('NNDBG', False)):
@@ -172,8 +215,10 @@ class Network(BaseThreadWrapper):
         self.tn = data["tn"]
         self.epochs = data["epochs"]
         self.epochsForTesting = data["epochsForTesting"]
+        self.memristorModel = data.get("memristorModel", "LIF (Empirical)")
         self.filename = data["fname"]
 
+        print('Memristor model: %s' % self.memristorModel)
         print('Ap:%f, An:%f, a0p:%f, a0n:%f, a1p:%f, a1n:%f, tp:%f, tn:%f'%(self.Ap, self.An, self.a0p, self.a0n, self.a1p, self.a1n, self.tp, self.tn))
 
         # pop the core parameters into distinct fields
@@ -221,6 +266,9 @@ class Network(BaseThreadWrapper):
         self.spikeTrainStep = 0
 
         self.core = self.load_core(core)
+        self.testAccuracy = None
+        self.testPredictions = np.array([])
+        self.testLabels = np.array([])
 
     def log(self, *args, **kwargs):
         """ Write to stderr if CTSDBG is set"""
@@ -252,6 +300,21 @@ class Network(BaseThreadWrapper):
                 HW.ArC.crossbar[w].append(mx)
                 #functions.updateHistory(w, b, mx.Rmem, self.Vread, 0.0, 'S R')
                 #functions.displayUpdate.cast()
+
+    def _compute_test_metrics(self):
+        if self.epochsForTesting <= 0:
+            self.testAccuracy = None
+            self.testPredictions = np.array([])
+            self.testLabels = np.array([])
+            return
+
+        output_start = self.NETSIZE - self.outputNum
+        pred = np.argmax(self.state.fireCellsForTest[:, output_start:], axis=1)
+        labels = np.argmax(self.stiminForTesting[output_start:, :].T, axis=1)
+        self.testPredictions = pred
+        self.testLabels = labels
+        self.testAccuracy = float(np.mean(pred == labels))
+        print("Testing accuracy: %.2f%%" % (self.testAccuracy * 100.0))
 
 
     @BaseThreadWrapper.runner
@@ -314,6 +377,7 @@ class Network(BaseThreadWrapper):
                 self.log("---> Time step synapses update in trianing: %d RAWIN: %s STIMIN: %s RAWINPSEUDO: %s" % (t, self.rawin, self.stimin[:, t], self.rawinPseudo))
                 self.core.neurons(self, t, phase = 'test')
                 self.displayData.emit()
+            self._compute_test_metrics()
 
         self.log("Final reading of all devices")
         # For every neuron in the system.
@@ -354,6 +418,9 @@ class Network(BaseThreadWrapper):
             # error between outputs and labels. No error for unsupervised learning
             data['error'] = self.state.errorList
             data['errorForTest'] = self.state.errorListForTest
+            data['testPredictions'] = self.testPredictions
+            data['testLabels'] = self.testLabels
+            data['testAccuracy'] = np.array([self.testAccuracy if self.testAccuracy is not None else np.nan], dtype=float)
             #data['R'] = self.state.R
 
             # and then any other arrays the core has produced
@@ -566,6 +633,13 @@ class NeuroPack(BaseProgPanel):
                     '1.5148294827972748'
                     ]
 
+        gridLayout.addWidget(QtWidgets.QLabel("Memristor model:"), 8, 4)
+        self.memristorModelCombo = QtWidgets.QComboBox()
+        for model_name in MEMRISTOR_MODEL_PRESETS.keys():
+            self.memristorModelCombo.addItem(model_name)
+        self.memristorModelCombo.currentTextChanged.connect(self.apply_memristor_preset)
+        gridLayout.addWidget(self.memristorModelCombo, 8, 5)
+
         #setup a line separator
         lineLeft = QtWidgets.QFrame()
         lineLeft.setFrameShape(QtWidgets.QFrame.VLine);
@@ -663,8 +737,17 @@ class NeuroPack(BaseProgPanel):
             "tn": float(self.rightEdits[7].text()),\
             "epochs": int(self.leftEdits[0].text()),\
             "epochsForTesting": int(self.leftEdits[1].text()),\
+            "memristorModel": self.memristorModelCombo.currentText(), \
             "fname": fname
         }
+
+    def apply_memristor_preset(self, model_name):
+        model_params = MEMRISTOR_MODEL_PRESETS.get(model_name)
+        if model_params is None:
+            return
+        keys = ["Ap", "An", "a0p", "a0n", "a1p", "a1n", "tp", "tn"]
+        for idx, key in enumerate(keys):
+            self.rightEdits[idx].setText(str(model_params[key]))
 
     def gather_params(self):
         return json.load(open(self.base_conf_fname))

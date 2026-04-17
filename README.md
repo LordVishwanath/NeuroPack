@@ -10,6 +10,7 @@ To get memristor fitting parameters, please use [ArC One](https://github.com/arc
 #### Components
  - `NeuroPack.py` implements the main panel and the built-in analysis tool for NeuroPack
  - `NeuroCores/core_X.py` implements the neuron model and the learning rule
+ - `tools/custom_image_inference.py` provides utilities for converting custom images into test stimuli and evaluating saved test accuracy
 
 ---
 #### Input files
@@ -45,6 +46,20 @@ If you want to reproduce the results showcased in the paper 'NeuroPack: An Algor
  - Tick 'Save to', click 'Load test file', and create a file to store inference results.
  - Select 'LIF_supervisedLearning_wta' for 'Network core'.
  - Press 'Train Network'
+
+---
+#### New features
+ - **Multiple memristor model presets** are now available from the GUI (`LIF (Empirical)`, `Stanford (Preset)`, `VTEAM (Preset)`, `HP (Preset)`). Selecting a model updates `Ap/An/a0*/a1*/t*` pulse-fit parameters automatically.
+ - **Post-training test metrics** are now saved to output NPZ files when testing is enabled:
+   - `testPredictions`
+   - `testLabels`
+   - `testAccuracy`
+ - **Custom image testing helper**:
+   - Convert an image folder into NeuroPack test stimuli:
+     - `python tools/custom_image_inference.py convert --image-dir ./my_images --output-file ./custom_test_stim.txt --input-num 484 --output-num 10`
+     - Image names should start with the ground-truth class label (example: `3_sample1.png`).
+   - Evaluate NPZ test results:
+     - `python tools/custom_image_inference.py evaluate --npz-file ./results.npz`
 ---
 #### Citation
 ```
